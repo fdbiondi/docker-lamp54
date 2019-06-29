@@ -17,7 +17,7 @@ services:
       - ${VHOSTS_DIR-./config/vhosts}:/etc/apache2/sites-enabled
       - ${LOG_DIR-./logs/apache2}:/var/log/apache2
   mysql:
-    image: mysql:5.6.44
+    build: ./bin/mysql
     container_name: '5.6-mysql'
     restart: 'no'
     ports:
