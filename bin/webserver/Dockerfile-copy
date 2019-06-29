@@ -1,0 +1,65 @@
+FROM php:5.4-apache
+
+RUN apt-get -y update && apt-get upgrade -y
+
+RUN apt-get update && apt-get install -y \
+        libapache2-mod-rpaf \
+        libfreetype6-dev \
+        libjpeg62-turbo-dev \
+        libmcrypt-dev \
+        libpng12-dev \
+        libicu-dev \
+    && a2enmod rewrite rpaf \
+    && docker-php-ext-install pdo_mysql mysql
+
+RUN apt-get install -y \
+        libmemcached-dev \
+    && curl -fsSL 'https://github.com/php-memcached-dev/php-memcached/archive/2.2.0.tar.gz' -o memcached.tar.gz \
+    && mkdir -p memcached \
+    && tar -xf memcached.tar.gz -C memcached --strip-components=1 \
+    && rm memcached.tar.gz \
+    && ( \
+        cd memcached \
+        && phpize \
+        && ./configure --enable-memcached \
+        && make -j$(nproc) \
+        && make install \
+    ) \
+    && rm -r memcached \
+    && docker-php-ext-enable memcached
+
+RUN apt-get install -y \
+      exim4 \
+    && useradd -G sudo -p $(perl -e'print crypt("tester", "tester")') -m -s /bin/bash -N tester \
+    && echo "sendmail_path = /usr/sbin/sendmail -t -i" > /usr/local/etc/php/php.ini
+
+# Install tools && libraries
+RUN apt-get -y install --fix-missing apt-utils nano wget dialog \
+    build-essential git curl libcurl3 libcurl3-dev zip \
+    libsqlite3-dev libsqlite3-0 mysql-client zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Composer
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+# PHP5 Extensions
+RUN docker-php-ext-install curl \
+    && docker-php-ext-install tokenizer \
+    && docker-php-ext-install json \
+    && docker-php-ext-install mcrypt \
+    && docker-php-ext-install pdo_sqlite \
+    && docker-php-ext-install mysqli \
+    && docker-php-ext-install zip \
+    && docker-php-ext-install -j$(nproc) intl \
+    && docker-php-ext-install mbstring \
+    && docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/ \
+    && docker-php-ext-install -j$(nproc) gd \
+    && pecl install xdebug-2.4.0RC4 && docker-php-ext-enable xdebug \
+    && echo "xdebug.remote_enable=1" >> /usr/local/etc/php/php.ini
+
+# Enable apache modules
+RUN a2enmod rewrite headers
+
+EXPOSE 80
+
+ENTRYPOINT ["/usr/sbin/apache2ctl", "-D", "FOREGROUND"]
